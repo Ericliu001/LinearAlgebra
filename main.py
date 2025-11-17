@@ -12,43 +12,16 @@ import sys
 
 class LinearAlgebraVisualizer:
     def __init__(self):
-        self.programmatic_close = False
+        # Use a single figure window for the entire app
+        self.fig = plt.figure(figsize=(12, 9))
+        self._widgets = []  # keep references to widgets to avoid GC
+        self.fig.canvas.mpl_connect('close_event', self.on_window_close)
 
-    def on_menu_close(self, _event):
-        """Handle main menu close event - exit program"""
-        if self.programmatic_close:
-            # Menu was closed programmatically to launch a viz, don't exit
-            self.programmatic_close = False
-            return
-        print("\nMenu closed. Exiting program...")
+    def on_window_close(self, _event):
+        """Exit when the single window is closed."""
+        print("\nWindow closed. Exiting program...")
         plt.close('all')
         sys.exit(0)
-
-    def on_viz_close(self, event=None):
-        """Handle visualization close event - return to menu"""
-        print("\nVisualization closed. Returning to menu...")
-        # Get the current figure
-        if event and hasattr(event, 'canvas'):
-            current_fig = event.canvas.figure
-        else:
-            # If called from button, get the current figure
-            current_fig = plt.gcf()
-
-        # Schedule showing the menu after the window closes
-        # This ensures we're not trying to show a new window while closing the old one
-        def show_menu_delayed():
-            plt.close(current_fig)
-            # Small pause to let the event loop complete
-            import time
-            time.sleep(0.1)
-            self.show_main_menu()
-
-        # Use matplotlib's Timer to defer the menu display
-        from matplotlib import pyplot
-        timer = current_fig.canvas.new_timer(interval=100)  # 100ms delay
-        timer.single_shot = True
-        timer.add_callback(show_menu_delayed)
-        timer.start()
 
     def visualize_2d_equation(self):
         """Interactive 2D linear equation with text box controls"""
@@ -58,9 +31,11 @@ class LinearAlgebraVisualizer:
         # Initial values
         a_init, b_init, c_init = 2.0, 3.0, 6.0
 
-        # Create figure
-        fig, ax = plt.subplots(figsize=(12, 9))
-        plt.subplots_adjust(left=0.1, right=0.75, bottom=0.15, top=0.92)
+        # Prepare figure
+        self.fig.clf()
+        self.fig.set_size_inches(12, 9, forward=True)
+        ax = self.fig.add_subplot(111)
+        self.fig.subplots_adjust(left=0.1, right=0.75, bottom=0.15, top=0.92)
 
         def update():
             """Update the plot based on text box values"""
@@ -102,16 +77,16 @@ class LinearAlgebraVisualizer:
             ax.set_xlabel('x', fontsize=12)
             ax.set_ylabel('y', fontsize=12)
 
-            fig.canvas.draw_idle()
+            self.fig.canvas.draw_idle()
 
         # Create text boxes on the right side
         text_box_width = 0.15
         text_box_height = 0.05
         right_margin = 0.80
 
-        ax_text_a = plt.axes([right_margin, 0.75, text_box_width, text_box_height])
-        ax_text_b = plt.axes([right_margin, 0.65, text_box_width, text_box_height])
-        ax_text_c = plt.axes([right_margin, 0.55, text_box_width, text_box_height])
+        ax_text_a = self.fig.add_axes([right_margin, 0.75, text_box_width, text_box_height])
+        ax_text_b = self.fig.add_axes([right_margin, 0.65, text_box_width, text_box_height])
+        ax_text_c = self.fig.add_axes([right_margin, 0.55, text_box_width, text_box_height])
 
         textbox_a = TextBox(ax_text_a, 'a = ', initial=f'{a_init:.2f}',
                            textalignment='center')
@@ -126,27 +101,22 @@ class LinearAlgebraVisualizer:
         textbox_c.on_submit(lambda _text: update())
 
         # Add instructions text
-        fig.text(right_margin + text_box_width/2, 0.85, 'Adjust Constants:',
+        self.fig.text(right_margin + text_box_width/2, 0.85, 'Adjust Constants:',
                 ha='center', fontsize=14, fontweight='bold')
-        fig.text(right_margin + text_box_width/2, 0.45,
+        self.fig.text(right_margin + text_box_width/2, 0.45,
                 'Type a value and\npress ENTER to update',
                 ha='center', fontsize=10, style='italic', alpha=0.7)
 
         # Add return to menu button
-        ax_menu = plt.axes([right_margin, 0.25, text_box_width, 0.06])
+        ax_menu = self.fig.add_axes([right_margin, 0.25, text_box_width, 0.06])
         btn_menu = Button(ax_menu, 'Return to Menu', color='lightblue')
-        btn_menu.on_clicked(lambda _event: self.on_viz_close(None))
+        btn_menu.on_clicked(lambda _event: self.show_main_menu())
 
         # Store widgets to prevent garbage collection
-        fig._widgets = [textbox_a, textbox_b, textbox_c, btn_menu]
-
-        # Connect close event
-        fig.canvas.mpl_connect('close_event', self.on_viz_close)
+        self._widgets = [textbox_a, textbox_b, textbox_c, btn_menu]
 
         # Initial plot
         update()
-
-        plt.show()
 
     def visualize_3d_equation(self):
         """Interactive 3D plane equation with text box controls"""
@@ -156,10 +126,11 @@ class LinearAlgebraVisualizer:
         # Initial values
         a_init, b_init, c_init, d_init = 2.0, 3.0, 1.0, 6.0
 
-        # Create figure with 3D subplot
-        fig = plt.figure(figsize=(14, 9))
-        ax = fig.add_subplot(111, projection='3d')
-        plt.subplots_adjust(left=0.05, right=0.70, bottom=0.1, top=0.95)
+        # Prepare figure with 3D subplot
+        self.fig.clf()
+        self.fig.set_size_inches(14, 9, forward=True)
+        ax = self.fig.add_subplot(111, projection='3d')
+        self.fig.subplots_adjust(left=0.05, right=0.70, bottom=0.1, top=0.95)
 
         def update():
             """Update the plot based on text box values"""
@@ -219,17 +190,17 @@ class LinearAlgebraVisualizer:
                         fontsize=16, fontweight='bold', pad=20)
             ax.legend(loc='upper right', fontsize=10)
 
-            fig.canvas.draw_idle()
+            self.fig.canvas.draw_idle()
 
         # Create text boxes on the right side
         text_box_width = 0.15
         text_box_height = 0.05
         right_margin = 0.75
 
-        ax_text_a = plt.axes([right_margin, 0.75, text_box_width, text_box_height])
-        ax_text_b = plt.axes([right_margin, 0.65, text_box_width, text_box_height])
-        ax_text_c = plt.axes([right_margin, 0.55, text_box_width, text_box_height])
-        ax_text_d = plt.axes([right_margin, 0.45, text_box_width, text_box_height])
+        ax_text_a = self.fig.add_axes([right_margin, 0.75, text_box_width, text_box_height])
+        ax_text_b = self.fig.add_axes([right_margin, 0.65, text_box_width, text_box_height])
+        ax_text_c = self.fig.add_axes([right_margin, 0.55, text_box_width, text_box_height])
+        ax_text_d = self.fig.add_axes([right_margin, 0.45, text_box_width, text_box_height])
 
         textbox_a = TextBox(ax_text_a, 'a = ', initial=f'{a_init:.2f}',
                            textalignment='center')
@@ -247,40 +218,33 @@ class LinearAlgebraVisualizer:
         textbox_d.on_submit(lambda _text: update())
 
         # Add instructions text
-        fig.text(right_margin + text_box_width/2, 0.85, 'Adjust Constants:',
+        self.fig.text(right_margin + text_box_width/2, 0.85, 'Adjust Constants:',
                 ha='center', fontsize=14, fontweight='bold')
-        fig.text(right_margin + text_box_width/2, 0.35,
+        self.fig.text(right_margin + text_box_width/2, 0.35,
                 'Type a value and\npress ENTER to update',
                 ha='center', fontsize=10, style='italic', alpha=0.7)
 
         # Add return to menu button
-        ax_menu = plt.axes([right_margin, 0.20, text_box_width, 0.06])
+        ax_menu = self.fig.add_axes([right_margin, 0.20, text_box_width, 0.06])
         btn_menu = Button(ax_menu, 'Return to Menu', color='lightblue')
-        btn_menu.on_clicked(lambda _event: self.on_viz_close(None))
+        btn_menu.on_clicked(lambda _event: self.show_main_menu())
 
         # Store widgets to prevent garbage collection
-        fig._widgets = [textbox_a, textbox_b, textbox_c, textbox_d, btn_menu]
-
-        # Connect close event
-        fig.canvas.mpl_connect('close_event', self.on_viz_close)
+        self._widgets = [textbox_a, textbox_b, textbox_c, textbox_d, btn_menu]
 
         # Initial plot
         update()
 
-        plt.show()
-
     def show_main_menu(self):
         """Display simplified main menu"""
-        # Close any existing plots
-        plt.close('all')
-
-        # Create main menu window
-        fig = plt.figure(figsize=(10, 7))
-        fig.suptitle('Interactive Linear Algebra Visualizer',
+        # Clear and rebuild the single window for the menu
+        self.fig.clf()
+        self.fig.set_size_inches(10, 7, forward=True)
+        self.fig.suptitle('Interactive Linear Algebra Visualizer',
                     fontsize=20, fontweight='bold')
 
         # Remove axes
-        ax = fig.add_subplot(111)
+        ax = self.fig.add_subplot(111)
         ax.set_xlim(0, 10)
         ax.set_ylim(0, 10)
         ax.axis('off')
@@ -294,35 +258,30 @@ class LinearAlgebraVisualizer:
                ha='center', fontsize=12, style='italic', alpha=0.7)
 
         # Create 2D button
-        ax_2d = plt.axes([0.15, 0.45, 0.3, 0.15])
+        ax_2d = self.fig.add_axes([0.15, 0.45, 0.3, 0.15])
         btn_2d = Button(ax_2d, '2 Variables\n(2D Linear Equation)',
                        color='lightblue')
 
         # Create 3D button
-        ax_3d = plt.axes([0.55, 0.45, 0.3, 0.15])
+        ax_3d = self.fig.add_axes([0.55, 0.45, 0.3, 0.15])
         btn_3d = Button(ax_3d, '3 Variables\n(3D Plane Equation)',
                        color='lightgreen')
 
         # Exit button
-        ax_exit = plt.axes([0.35, 0.20, 0.3, 0.1])
+        ax_exit = self.fig.add_axes([0.35, 0.20, 0.3, 0.1])
         btn_exit = Button(ax_exit, 'Exit Program', color='lightcoral')
 
         # Store buttons to prevent garbage collection
-        fig._buttons = [btn_2d, btn_3d, btn_exit]
+        self._widgets = [btn_2d, btn_3d, btn_exit]
 
         # Connect buttons to functions
         def launch_viz(viz_func):
-            """Close menu and launch visualization"""
-            self.programmatic_close = True
-            plt.close(fig)
+            """Replace menu with the selected visualization"""
             viz_func()
 
         btn_2d.on_clicked(lambda _event: launch_viz(self.visualize_2d_equation))
         btn_3d.on_clicked(lambda _event: launch_viz(self.visualize_3d_equation))
-        btn_exit.on_clicked(lambda _event: self.on_menu_close(None))
-
-        # Connect close event
-        fig.canvas.mpl_connect('close_event', self.on_menu_close)
+        btn_exit.on_clicked(lambda _event: self.on_window_close(None))
 
         # Add instructions
         ax.text(5, 1.2, 'Click a button to start visualizing equations!',
@@ -330,7 +289,7 @@ class LinearAlgebraVisualizer:
         ax.text(5, 0.6, 'You can adjust constants using text boxes in the visualization',
                ha='center', fontsize=10, alpha=0.6)
 
-        plt.show()
+        self.fig.canvas.draw_idle()
 
     def run(self):
         """Main run loop"""
@@ -340,6 +299,7 @@ class LinearAlgebraVisualizer:
         print("=" * 60)
 
         self.show_main_menu()
+        plt.show()
 
 
 if __name__ == '__main__':

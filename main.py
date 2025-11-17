@@ -1,736 +1,345 @@
 """
 Interactive Linear Algebra Visualization Script
-Allows users to input their own constants and visualize linear algebra concepts
+Allows users to choose 2D or 3D equations and adjust constants using text boxes
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.widgets import TextBox, Button
+import sys
 
 
 class LinearAlgebraVisualizer:
     def __init__(self):
-        self.dimension = None
-        self.visualization_type = None
+        self.programmatic_close = False
 
-    def get_dimension_choice(self):
-        """Ask user to choose between 2D or 3D"""
-        while True:
-            print("\n" + "=" * 50)
-            print("Choose dimension:")
-            print("1. 2 Variables (2D)")
-            print("2. 3 Variables (3D)")
-            print("0. Exit")
-            print("=" * 50)
+    def on_menu_close(self, _event):
+        """Handle main menu close event - exit program"""
+        if self.programmatic_close:
+            # Menu was closed programmatically to launch a viz, don't exit
+            self.programmatic_close = False
+            return
+        print("\nMenu closed. Exiting program...")
+        plt.close('all')
+        sys.exit(0)
 
-            choice = input("\nEnter your choice (0-2): ").strip()
+    def on_viz_close(self, event=None):
+        """Handle visualization close event - return to menu"""
+        print("\nVisualization closed. Returning to menu...")
+        # Get the current figure
+        if event and hasattr(event, 'canvas'):
+            current_fig = event.canvas.figure
+        else:
+            # If called from button, get the current figure
+            current_fig = plt.gcf()
 
-            if choice == '0':
-                return None
-            elif choice == '1':
-                return 2
-            elif choice == '2':
-                return 3
+        # Schedule showing the menu after the window closes
+        # This ensures we're not trying to show a new window while closing the old one
+        def show_menu_delayed():
+            plt.close(current_fig)
+            # Small pause to let the event loop complete
+            import time
+            time.sleep(0.1)
+            self.show_main_menu()
+
+        # Use matplotlib's Timer to defer the menu display
+        from matplotlib import pyplot
+        timer = current_fig.canvas.new_timer(interval=100)  # 100ms delay
+        timer.single_shot = True
+        timer.add_callback(show_menu_delayed)
+        timer.start()
+
+    def visualize_2d_equation(self):
+        """Interactive 2D linear equation with text box controls"""
+        print("\n2D Linear Equation - Use text boxes to adjust coefficients")
+        print("Equation form: ax + by = c")
+
+        # Initial values
+        a_init, b_init, c_init = 2.0, 3.0, 6.0
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(12, 9))
+        plt.subplots_adjust(left=0.1, right=0.75, bottom=0.15, top=0.92)
+
+        def update():
+            """Update the plot based on text box values"""
+            try:
+                a = float(textbox_a.text)
+                b = float(textbox_b.text)
+                c = float(textbox_c.text)
+            except ValueError:
+                return  # Skip update if values are invalid
+
+            ax.clear()
+
+            x = np.linspace(-10, 10, 200)
+
+            # Plot the line
+            if abs(b) > 0.001:
+                y = (c - a*x) / b
+                ax.plot(x, y, 'b-', linewidth=2.5, label=f'{a:.2f}x + {b:.2f}y = {c:.2f}')
+            elif abs(a) > 0.001:
+                # Vertical line
+                x_val = c / a
+                ax.axvline(x=x_val, color='b', linewidth=2.5, label=f'{a:.2f}x = {c:.2f}')
             else:
-                print("Invalid choice. Please enter 0, 1, or 2.")
+                # Degenerate case
+                ax.text(0, 0, 'Invalid equation (a and b cannot both be 0)',
+                       ha='center', va='center', fontsize=14, color='red')
 
-    def get_visualization_type(self, dimension):
-        """Ask user what type of visualization they want"""
-        while True:
-            print("\n" + "=" * 50)
-            if dimension == 2:
-                print("Choose visualization type:")
-                print("1. Vectors (addition/subtraction)")
-                print("2. Linear Equation (line)")
-                print("3. System of Linear Equations (2 lines)")
-                print("4. Linear Transformation (matrix)")
-                print("0. Back to main menu")
-            else:  # 3D
-                print("Choose visualization type:")
-                print("1. Vectors (addition/cross product)")
-                print("2. Plane (single plane)")
-                print("3. System of Planes (2 planes)")
-                print("4. Linear Transformation (matrix)")
-                print("0. Back to main menu")
-            print("=" * 50)
+            # Add grid and axes
+            ax.axhline(y=0, color='k', linewidth=0.8, alpha=0.3)
+            ax.axvline(x=0, color='k', linewidth=0.8, alpha=0.3)
+            ax.grid(True, alpha=0.3, linestyle='--')
 
-            choice = input("\nEnter your choice (0-4): ").strip()
+            ax.set_xlim(-10, 10)
+            ax.set_ylim(-10, 10)
+            ax.set_aspect('equal')
+            ax.legend(fontsize=12, loc='upper left')
+            ax.set_title(f'2D Linear Equation: {a:.2f}x + {b:.2f}y = {c:.2f}',
+                        fontsize=16, fontweight='bold', pad=20)
+            ax.set_xlabel('x', fontsize=12)
+            ax.set_ylabel('y', fontsize=12)
 
-            if choice in ['0', '1', '2', '3', '4']:
-                return choice
-            else:
-                print("Invalid choice. Please try again.")
+            fig.canvas.draw_idle()
 
-    def visualize_2d_vectors(self):
-        """Interactive 2D vector visualization"""
-        while True:
-            print("\n" + "=" * 50)
-            print("2D Vector Visualization")
-            print("=" * 50)
+        # Create text boxes on the right side
+        text_box_width = 0.15
+        text_box_height = 0.05
+        right_margin = 0.80
 
+        ax_text_a = plt.axes([right_margin, 0.75, text_box_width, text_box_height])
+        ax_text_b = plt.axes([right_margin, 0.65, text_box_width, text_box_height])
+        ax_text_c = plt.axes([right_margin, 0.55, text_box_width, text_box_height])
+
+        textbox_a = TextBox(ax_text_a, 'a = ', initial=f'{a_init:.2f}',
+                           textalignment='center')
+        textbox_b = TextBox(ax_text_b, 'b = ', initial=f'{b_init:.2f}',
+                           textalignment='center')
+        textbox_c = TextBox(ax_text_c, 'c = ', initial=f'{c_init:.2f}',
+                           textalignment='center')
+
+        # Connect text boxes to update function
+        textbox_a.on_submit(lambda _text: update())
+        textbox_b.on_submit(lambda _text: update())
+        textbox_c.on_submit(lambda _text: update())
+
+        # Add instructions text
+        fig.text(right_margin + text_box_width/2, 0.85, 'Adjust Constants:',
+                ha='center', fontsize=14, fontweight='bold')
+        fig.text(right_margin + text_box_width/2, 0.45,
+                'Type a value and\npress ENTER to update',
+                ha='center', fontsize=10, style='italic', alpha=0.7)
+
+        # Add return to menu button
+        ax_menu = plt.axes([right_margin, 0.25, text_box_width, 0.06])
+        btn_menu = Button(ax_menu, 'Return to Menu', color='lightblue')
+        btn_menu.on_clicked(lambda _event: self.on_viz_close(None))
+
+        # Store widgets to prevent garbage collection
+        fig._widgets = [textbox_a, textbox_b, textbox_c, btn_menu]
+
+        # Connect close event
+        fig.canvas.mpl_connect('close_event', self.on_viz_close)
+
+        # Initial plot
+        update()
+
+        plt.show()
+
+    def visualize_3d_equation(self):
+        """Interactive 3D plane equation with text box controls"""
+        print("\n3D Plane Equation - Use text boxes to adjust coefficients")
+        print("Equation form: ax + by + cz = d")
+
+        # Initial values
+        a_init, b_init, c_init, d_init = 2.0, 3.0, 1.0, 6.0
+
+        # Create figure with 3D subplot
+        fig = plt.figure(figsize=(14, 9))
+        ax = fig.add_subplot(111, projection='3d')
+        plt.subplots_adjust(left=0.05, right=0.70, bottom=0.1, top=0.95)
+
+        def update():
+            """Update the plot based on text box values"""
             try:
-                print("\nEnter first vector (v1):")
-                v1_x = float(input("  x component: "))
-                v1_y = float(input("  y component: "))
-
-                print("\nEnter second vector (v2):")
-                v2_x = float(input("  x component: "))
-                v2_y = float(input("  y component: "))
-
-                v1 = np.array([v1_x, v1_y])
-                v2 = np.array([v2_x, v2_y])
-                v_sum = v1 + v2
-                v_diff = v1 - v2
-
-                # Create plot
-                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-
-                # Vector addition
-                ax1.quiver(0, 0, v1[0], v1[1], angles='xy', scale_units='xy', scale=1,
-                          color='r', width=0.006, label=f'v1 = ({v1[0]}, {v1[1]})')
-                ax1.quiver(0, 0, v2[0], v2[1], angles='xy', scale_units='xy', scale=1,
-                          color='b', width=0.006, label=f'v2 = ({v2[0]}, {v2[1]})')
-                ax1.quiver(0, 0, v_sum[0], v_sum[1], angles='xy', scale_units='xy', scale=1,
-                          color='g', width=0.006, label=f'v1 + v2 = ({v_sum[0]:.1f}, {v_sum[1]:.1f})')
-
-                # Parallelogram
-                ax1.quiver(v1[0], v1[1], v2[0], v2[1], angles='xy', scale_units='xy',
-                          scale=1, color='b', alpha=0.3, width=0.003)
-                ax1.quiver(v2[0], v2[1], v1[0], v1[1], angles='xy', scale_units='xy',
-                          scale=1, color='r', alpha=0.3, width=0.003)
-
-                max_val = max(abs(v_sum[0]), abs(v_sum[1])) + 1
-                ax1.set_xlim(-max_val, max_val)
-                ax1.set_ylim(-max_val, max_val)
-                ax1.set_aspect('equal')
-                ax1.grid(True, alpha=0.3)
-                ax1.legend()
-                ax1.set_title('Vector Addition')
-                ax1.set_xlabel('x')
-                ax1.set_ylabel('y')
-
-                # Vector subtraction
-                ax2.quiver(0, 0, v1[0], v1[1], angles='xy', scale_units='xy', scale=1,
-                          color='r', width=0.006, label=f'v1 = ({v1[0]}, {v1[1]})')
-                ax2.quiver(0, 0, v2[0], v2[1], angles='xy', scale_units='xy', scale=1,
-                          color='b', width=0.006, label=f'v2 = ({v2[0]}, {v2[1]})')
-                ax2.quiver(0, 0, v_diff[0], v_diff[1], angles='xy', scale_units='xy', scale=1,
-                          color='purple', width=0.006, label=f'v1 - v2 = ({v_diff[0]:.1f}, {v_diff[1]:.1f})')
-
-                ax2.set_xlim(-max_val, max_val)
-                ax2.set_ylim(-max_val, max_val)
-                ax2.set_aspect('equal')
-                ax2.grid(True, alpha=0.3)
-                ax2.legend()
-                ax2.set_title('Vector Subtraction')
-                ax2.set_xlabel('x')
-                ax2.set_ylabel('y')
-
-                plt.tight_layout()
-                plt.show(block=False)
-                plt.pause(0.1)
-
+                a = float(textbox_a.text)
+                b = float(textbox_b.text)
+                c = float(textbox_c.text)
+                d = float(textbox_d.text)
             except ValueError:
-                print("Invalid input. Please enter numbers only.")
-                continue
+                return  # Skip update if values are invalid
 
-            # Ask if user wants to modify
-            choice = input("\nOptions:\n1. Modify values\n2. Save image\n0. Back to menu\nChoice: ").strip()
-            if choice == '2':
-                filename = input("Enter filename (without extension): ").strip()
-                plt.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
-                print(f"Saved as {filename}.png")
-            elif choice != '1':
-                plt.close()
-                break
-            plt.close()
+            # Clear only the 3D axis
+            ax.clear()
 
-    def visualize_2d_linear_equation(self):
-        """Interactive 2D linear equation visualization"""
-        while True:
-            print("\n" + "=" * 50)
-            print("2D Linear Equation: ax + by = c")
-            print("=" * 50)
+            # Create meshgrid
+            x = np.linspace(-10, 10, 30)
+            y = np.linspace(-10, 10, 30)
+            X, Y = np.meshgrid(x, y)
 
-            try:
-                a = float(input("Enter coefficient a: "))
-                b = float(input("Enter coefficient b: "))
-                c = float(input("Enter constant c: "))
+            # Calculate Z and plot the plane
+            if abs(c) > 0.001:
+                Z = (d - a*X - b*Y) / c
+                ax.plot_surface(X, Y, Z, alpha=0.7, cmap='viridis',
+                              edgecolor='none', antialiased=True)
 
-                if a == 0 and b == 0:
-                    print("Error: Both coefficients cannot be zero.")
-                    continue
-
-                # Create plot
-                fig, ax = plt.subplots(figsize=(8, 8))
-
-                x = np.linspace(-10, 10, 100)
-
-                if b != 0:
-                    y = (c - a*x) / b
-                    ax.plot(x, y, 'b-', linewidth=2, label=f'{a}x + {b}y = {c}')
-                else:
-                    # Vertical line
-                    x_val = c / a
-                    ax.axvline(x=x_val, color='b', linewidth=2, label=f'{a}x = {c}')
-
-                ax.axhline(y=0, color='k', linewidth=0.5)
-                ax.axvline(x=0, color='k', linewidth=0.5)
-                ax.grid(True, alpha=0.3)
-                ax.set_xlim(-10, 10)
-                ax.set_ylim(-10, 10)
-                ax.set_aspect('equal')
-                ax.legend(fontsize=12)
-                ax.set_title(f'Linear Equation: {a}x + {b}y = {c}', fontsize=14)
-                ax.set_xlabel('x')
-                ax.set_ylabel('y')
-
-                plt.tight_layout()
-                plt.show(block=False)
-                plt.pause(0.1)
-
-            except ValueError:
-                print("Invalid input. Please enter numbers only.")
-                continue
-
-            choice = input("\nOptions:\n1. Modify values\n2. Save image\n0. Back to menu\nChoice: ").strip()
-            if choice == '2':
-                filename = input("Enter filename (without extension): ").strip()
-                plt.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
-                print(f"Saved as {filename}.png")
-            elif choice != '1':
-                plt.close()
-                break
-            plt.close()
-
-    def visualize_2d_system(self):
-        """Interactive system of 2D linear equations"""
-        while True:
-            print("\n" + "=" * 50)
-            print("System of Linear Equations")
-            print("Equation 1: a1*x + b1*y = c1")
-            print("Equation 2: a2*x + b2*y = c2")
-            print("=" * 50)
-
-            try:
-                print("\nEquation 1:")
-                a1 = float(input("  a1: "))
-                b1 = float(input("  b1: "))
-                c1 = float(input("  c1: "))
-
-                print("\nEquation 2:")
-                a2 = float(input("  a2: "))
-                b2 = float(input("  b2: "))
-                c2 = float(input("  c2: "))
-
-                # Create plot
-                fig, ax = plt.subplots(figsize=(10, 10))
-
-                x = np.linspace(-10, 10, 100)
-
-                # Plot first equation
-                if b1 != 0:
-                    y1 = (c1 - a1*x) / b1
-                    ax.plot(x, y1, 'b-', linewidth=2, label=f'{a1}x + {b1}y = {c1}')
-                else:
-                    x_val = c1 / a1 if a1 != 0 else 0
-                    ax.axvline(x=x_val, color='b', linewidth=2, label=f'{a1}x = {c1}')
-
-                # Plot second equation
-                if b2 != 0:
-                    y2 = (c2 - a2*x) / b2
-                    ax.plot(x, y2, 'r-', linewidth=2, label=f'{a2}x + {b2}y = {c2}')
-                else:
-                    x_val = c2 / a2 if a2 != 0 else 0
-                    ax.axvline(x=x_val, color='r', linewidth=2, label=f'{a2}x = {c2}')
-
-                # Solve for intersection using Cramer's rule
-                det = a1*b2 - a2*b1
-
-                if abs(det) > 1e-10:  # Lines intersect at one point
-                    x_sol = (c1*b2 - c2*b1) / det
-                    y_sol = (a1*c2 - a2*c1) / det
-                    ax.plot(x_sol, y_sol, 'go', markersize=12, label=f'Solution ({x_sol:.2f}, {y_sol:.2f})')
-                    print(f"\nSolution: x = {x_sol:.4f}, y = {y_sol:.4f}")
-                elif abs(a1*b2 - a2*b1) < 1e-10 and abs(a1*c2 - a2*c1) < 1e-10:
-                    print("\nInfinite solutions (same line)")
-                else:
-                    print("\nNo solution (parallel lines)")
-
-                ax.axhline(y=0, color='k', linewidth=0.5)
-                ax.axvline(x=0, color='k', linewidth=0.5)
-                ax.grid(True, alpha=0.3)
-                ax.set_xlim(-10, 10)
-                ax.set_ylim(-10, 10)
-                ax.set_aspect('equal')
-                ax.legend(fontsize=10)
-                ax.set_title('System of Linear Equations', fontsize=14)
-                ax.set_xlabel('x')
-                ax.set_ylabel('y')
-
-                plt.tight_layout()
-                plt.show(block=False)
-                plt.pause(0.1)
-
-            except ValueError:
-                print("Invalid input. Please enter numbers only.")
-                continue
-
-            choice = input("\nOptions:\n1. Modify values\n2. Save image\n0. Back to menu\nChoice: ").strip()
-            if choice == '2':
-                filename = input("Enter filename (without extension): ").strip()
-                plt.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
-                print(f"Saved as {filename}.png")
-            elif choice != '1':
-                plt.close()
-                break
-            plt.close()
-
-    def visualize_2d_transformation(self):
-        """Interactive 2D linear transformation"""
-        while True:
-            print("\n" + "=" * 50)
-            print("2D Linear Transformation")
-            print("Matrix: [[a, b], [c, d]]")
-            print("=" * 50)
-
-            try:
-                print("\nEnter transformation matrix:")
-                a = float(input("  a (top-left): "))
-                b = float(input("  b (top-right): "))
-                c = float(input("  c (bottom-left): "))
-                d = float(input("  d (bottom-right): "))
-
-                transform = np.array([[a, b], [c, d]])
-
-                # Original vectors (basis vectors and a sample vector)
-                vectors = np.array([[1, 0], [0, 1], [1, 1]])
-                transformed = vectors @ transform.T
-
-                # Create plot
-                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
-
-                colors = ['r', 'g', 'b']
-                labels = ['i (1,0)', 'j (0,1)', '(1,1)']
-
-                # Original vectors
-                for i, v in enumerate(vectors):
-                    ax1.quiver(0, 0, v[0], v[1], angles='xy', scale_units='xy', scale=1,
-                              color=colors[i], width=0.008, label=labels[i])
-
-                ax1.set_xlim(-3, 3)
-                ax1.set_ylim(-3, 3)
-                ax1.set_aspect('equal')
-                ax1.grid(True, alpha=0.3)
-                ax1.legend()
-                ax1.set_title('Original Vectors')
-                ax1.set_xlabel('x')
-                ax1.set_ylabel('y')
-
-                # Transformed vectors
-                for i, v in enumerate(transformed):
-                    ax2.quiver(0, 0, v[0], v[1], angles='xy', scale_units='xy', scale=1,
-                              color=colors[i], width=0.008,
-                              label=f"({v[0]:.2f}, {v[1]:.2f})")
-
-                max_val = max(np.max(np.abs(transformed)) + 1, 3)
-                ax2.set_xlim(-max_val, max_val)
-                ax2.set_ylim(-max_val, max_val)
-                ax2.set_aspect('equal')
-                ax2.grid(True, alpha=0.3)
-                ax2.legend()
-                ax2.set_title(f'After Transformation\n[[{a}, {b}], [{c}, {d}]]')
-                ax2.set_xlabel('x')
-                ax2.set_ylabel('y')
-
-                plt.tight_layout()
-                plt.show(block=False)
-                plt.pause(0.1)
-
-                # Calculate determinant
-                det = a*d - b*c
-                print(f"\nDeterminant: {det:.4f}")
-                print(f"Area scaling factor: {abs(det):.4f}")
-
-            except ValueError:
-                print("Invalid input. Please enter numbers only.")
-                continue
-
-            choice = input("\nOptions:\n1. Modify values\n2. Save image\n0. Back to menu\nChoice: ").strip()
-            if choice == '2':
-                filename = input("Enter filename (without extension): ").strip()
-                plt.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
-                print(f"Saved as {filename}.png")
-            elif choice != '1':
-                plt.close()
-                break
-            plt.close()
-
-    def visualize_3d_vectors(self):
-        """Interactive 3D vector visualization"""
-        while True:
-            print("\n" + "=" * 50)
-            print("3D Vector Visualization")
-            print("=" * 50)
-
-            try:
-                print("\nEnter first vector (v1):")
-                v1_x = float(input("  x component: "))
-                v1_y = float(input("  y component: "))
-                v1_z = float(input("  z component: "))
-
-                print("\nEnter second vector (v2):")
-                v2_x = float(input("  x component: "))
-                v2_y = float(input("  y component: "))
-                v2_z = float(input("  z component: "))
-
-                v1 = np.array([v1_x, v1_y, v1_z])
-                v2 = np.array([v2_x, v2_y, v2_z])
-                v_sum = v1 + v2
-                v_cross = np.cross(v1, v2)
-
-                # Create plot
-                fig = plt.figure(figsize=(14, 6))
-
-                # Vector addition
-                ax1 = fig.add_subplot(121, projection='3d')
-
-                ax1.quiver(0, 0, 0, v1[0], v1[1], v1[2], color='r',
-                          arrow_length_ratio=0.1, linewidth=2, label=f'v1 = ({v1[0]}, {v1[1]}, {v1[2]})')
-                ax1.quiver(0, 0, 0, v2[0], v2[1], v2[2], color='b',
-                          arrow_length_ratio=0.1, linewidth=2, label=f'v2 = ({v2[0]}, {v2[1]}, {v2[2]})')
-                ax1.quiver(0, 0, 0, v_sum[0], v_sum[1], v_sum[2], color='g',
-                          arrow_length_ratio=0.1, linewidth=2,
-                          label=f'v1+v2 = ({v_sum[0]:.1f}, {v_sum[1]:.1f}, {v_sum[2]:.1f})')
-
-                max_val = max(np.max(np.abs(v_sum)) + 1, 2)
-                ax1.set_xlim([0, max_val])
-                ax1.set_ylim([0, max_val])
-                ax1.set_zlim([0, max_val])
-                ax1.set_xlabel('X')
-                ax1.set_ylabel('Y')
-                ax1.set_zlabel('Z')
-                ax1.legend()
-                ax1.set_title('Vector Addition')
-
-                # Cross product
-                ax2 = fig.add_subplot(122, projection='3d')
-
-                ax2.quiver(0, 0, 0, v1[0], v1[1], v1[2], color='r',
-                          arrow_length_ratio=0.1, linewidth=2, label='v1')
-                ax2.quiver(0, 0, 0, v2[0], v2[1], v2[2], color='b',
-                          arrow_length_ratio=0.1, linewidth=2, label='v2')
-                ax2.quiver(0, 0, 0, v_cross[0], v_cross[1], v_cross[2], color='purple',
-                          arrow_length_ratio=0.1, linewidth=3,
-                          label=f'v1×v2 = ({v_cross[0]:.1f}, {v_cross[1]:.1f}, {v_cross[2]:.1f})')
-
-                max_val = max(np.max(np.abs(np.concatenate([v1, v2, v_cross]))) + 1, 2)
-                ax2.set_xlim([-max_val, max_val])
-                ax2.set_ylim([-max_val, max_val])
-                ax2.set_zlim([-max_val, max_val])
-                ax2.set_xlabel('X')
-                ax2.set_ylabel('Y')
-                ax2.set_zlabel('Z')
-                ax2.legend()
-                ax2.set_title('Cross Product (perpendicular)')
-
-                plt.tight_layout()
-                plt.show(block=False)
-                plt.pause(0.1)
-
-                # Print dot product
-                dot_product = np.dot(v1, v2)
-                print(f"\nDot product: {dot_product:.4f}")
-                print(f"Cross product magnitude: {np.linalg.norm(v_cross):.4f}")
-
-            except ValueError:
-                print("Invalid input. Please enter numbers only.")
-                continue
-
-            choice = input("\nOptions:\n1. Modify values\n2. Save image\n0. Back to menu\nChoice: ").strip()
-            if choice == '2':
-                filename = input("Enter filename (without extension): ").strip()
-                plt.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
-                print(f"Saved as {filename}.png")
-            elif choice != '1':
-                plt.close()
-                break
-            plt.close()
-
-    def visualize_3d_plane(self):
-        """Interactive 3D plane visualization"""
-        while True:
-            print("\n" + "=" * 50)
-            print("3D Plane: ax + by + cz = d")
-            print("=" * 50)
-
-            try:
-                a = float(input("Enter coefficient a: "))
-                b = float(input("Enter coefficient b: "))
-                c = float(input("Enter coefficient c: "))
-                d = float(input("Enter constant d: "))
-
-                if a == 0 and b == 0 and c == 0:
-                    print("Error: All coefficients cannot be zero.")
-                    continue
-
-                # Create plot
-                fig = plt.figure(figsize=(10, 8))
-                ax = fig.add_subplot(111, projection='3d')
-
-                # Create meshgrid
-                x = np.linspace(-10, 10, 20)
-                y = np.linspace(-10, 10, 20)
-                X, Y = np.meshgrid(x, y)
-
-                # Calculate Z based on the equation
-                if c != 0:
-                    Z = (d - a*X - b*Y) / c
-                elif b != 0:
-                    # Plane parallel to z-axis
-                    Z = np.outer(np.ones(20), np.linspace(-10, 10, 20))
-                    Y = (d - a*X) / b * np.ones_like(Z)
-                else:
-                    # Plane parallel to y and z axes
-                    X = (d / a) * np.ones_like(X)
-
-                ax.plot_surface(X, Y, Z, alpha=0.6, cmap='viridis')
-
-                # Normal vector
-                normal = np.array([a, b, c])
+                # Draw normal vector
                 # Find a point on the plane
-                if c != 0:
+                if abs(c) > 0.001:
                     point = np.array([0, 0, d/c])
-                elif b != 0:
+                elif abs(b) > 0.001:
                     point = np.array([0, d/b, 0])
-                else:
+                elif abs(a) > 0.001:
                     point = np.array([d/a, 0, 0])
+                else:
+                    point = np.array([0, 0, 0])
 
-                # Scale normal for visualization
-                normal_scaled = normal / np.linalg.norm(normal) * 3
+                # Scale normal vector for visualization
+                normal = np.array([a, b, c])
+                norm_mag = np.linalg.norm(normal)
+                if norm_mag > 0:
+                    normal_scaled = normal / norm_mag * 5
+                    ax.quiver(point[0], point[1], point[2],
+                            normal_scaled[0], normal_scaled[1], normal_scaled[2],
+                            color='red', arrow_length_ratio=0.15, linewidth=3,
+                            label='Normal Vector')
+            else:
+                ax.text(0, 0, 0, 'Invalid equation\n(c cannot be 0 for this view)',
+                       ha='center', va='center', fontsize=14, color='red')
 
-                ax.quiver(point[0], point[1], point[2],
-                         normal_scaled[0], normal_scaled[1], normal_scaled[2],
-                         color='r', arrow_length_ratio=0.2, linewidth=3, label='Normal vector')
+            ax.set_xlabel('X', fontsize=12, labelpad=10)
+            ax.set_ylabel('Y', fontsize=12, labelpad=10)
+            ax.set_zlabel('Z', fontsize=12, labelpad=10)
+            ax.set_xlim([-10, 10])
+            ax.set_ylim([-10, 10])
+            ax.set_zlim([-10, 10])
+            ax.set_title(f'3D Plane: {a:.2f}x + {b:.2f}y + {c:.2f}z = {d:.2f}',
+                        fontsize=16, fontweight='bold', pad=20)
+            ax.legend(loc='upper right', fontsize=10)
 
-                ax.set_xlabel('X')
-                ax.set_ylabel('Y')
-                ax.set_zlabel('Z')
-                ax.set_title(f'Plane: {a}x + {b}y + {c}z = {d}')
-                ax.legend()
+            fig.canvas.draw_idle()
 
-                plt.tight_layout()
-                plt.show(block=False)
-                plt.pause(0.1)
+        # Create text boxes on the right side
+        text_box_width = 0.15
+        text_box_height = 0.05
+        right_margin = 0.75
 
-                print(f"\nNormal vector: ({a}, {b}, {c})")
+        ax_text_a = plt.axes([right_margin, 0.75, text_box_width, text_box_height])
+        ax_text_b = plt.axes([right_margin, 0.65, text_box_width, text_box_height])
+        ax_text_c = plt.axes([right_margin, 0.55, text_box_width, text_box_height])
+        ax_text_d = plt.axes([right_margin, 0.45, text_box_width, text_box_height])
 
-            except ValueError:
-                print("Invalid input. Please enter numbers only.")
-                continue
+        textbox_a = TextBox(ax_text_a, 'a = ', initial=f'{a_init:.2f}',
+                           textalignment='center')
+        textbox_b = TextBox(ax_text_b, 'b = ', initial=f'{b_init:.2f}',
+                           textalignment='center')
+        textbox_c = TextBox(ax_text_c, 'c = ', initial=f'{c_init:.2f}',
+                           textalignment='center')
+        textbox_d = TextBox(ax_text_d, 'd = ', initial=f'{d_init:.2f}',
+                           textalignment='center')
 
-            choice = input("\nOptions:\n1. Modify values\n2. Save image\n0. Back to menu\nChoice: ").strip()
-            if choice == '2':
-                filename = input("Enter filename (without extension): ").strip()
-                plt.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
-                print(f"Saved as {filename}.png")
-            elif choice != '1':
-                plt.close()
-                break
-            plt.close()
+        # Connect text boxes to update function
+        textbox_a.on_submit(lambda _text: update())
+        textbox_b.on_submit(lambda _text: update())
+        textbox_c.on_submit(lambda _text: update())
+        textbox_d.on_submit(lambda _text: update())
 
-    def visualize_3d_system(self):
-        """Interactive system of 3D planes"""
-        while True:
-            print("\n" + "=" * 50)
-            print("System of Planes in 3D")
-            print("Plane 1: a1*x + b1*y + c1*z = d1")
-            print("Plane 2: a2*x + b2*y + c2*z = d2")
-            print("=" * 50)
+        # Add instructions text
+        fig.text(right_margin + text_box_width/2, 0.85, 'Adjust Constants:',
+                ha='center', fontsize=14, fontweight='bold')
+        fig.text(right_margin + text_box_width/2, 0.35,
+                'Type a value and\npress ENTER to update',
+                ha='center', fontsize=10, style='italic', alpha=0.7)
 
-            try:
-                print("\nPlane 1:")
-                a1 = float(input("  a1: "))
-                b1 = float(input("  b1: "))
-                c1 = float(input("  c1: "))
-                d1 = float(input("  d1: "))
+        # Add return to menu button
+        ax_menu = plt.axes([right_margin, 0.20, text_box_width, 0.06])
+        btn_menu = Button(ax_menu, 'Return to Menu', color='lightblue')
+        btn_menu.on_clicked(lambda _event: self.on_viz_close(None))
 
-                print("\nPlane 2:")
-                a2 = float(input("  a2: "))
-                b2 = float(input("  b2: "))
-                c2 = float(input("  c2: "))
-                d2 = float(input("  d2: "))
+        # Store widgets to prevent garbage collection
+        fig._widgets = [textbox_a, textbox_b, textbox_c, textbox_d, btn_menu]
 
-                # Create plot
-                fig = plt.figure(figsize=(12, 10))
-                ax = fig.add_subplot(111, projection='3d')
+        # Connect close event
+        fig.canvas.mpl_connect('close_event', self.on_viz_close)
 
-                # Create meshgrid
-                x = np.linspace(-10, 10, 20)
-                y = np.linspace(-10, 10, 20)
-                X, Y = np.meshgrid(x, y)
+        # Initial plot
+        update()
 
-                # Calculate Z for both planes
-                if c1 != 0:
-                    Z1 = (d1 - a1*X - b1*Y) / c1
-                    ax.plot_surface(X, Y, Z1, alpha=0.4, color='blue')
+        plt.show()
 
-                if c2 != 0:
-                    Z2 = (d2 - a2*X - b2*Y) / c2
-                    ax.plot_surface(X, Y, Z2, alpha=0.4, color='red')
+    def show_main_menu(self):
+        """Display simplified main menu"""
+        # Close any existing plots
+        plt.close('all')
 
-                ax.set_xlabel('X')
-                ax.set_ylabel('Y')
-                ax.set_zlabel('Z')
-                ax.set_title(f'Plane 1: {a1}x+{b1}y+{c1}z={d1}\nPlane 2: {a2}x+{b2}y+{c2}z={d2}')
+        # Create main menu window
+        fig = plt.figure(figsize=(10, 7))
+        fig.suptitle('Interactive Linear Algebra Visualizer',
+                    fontsize=20, fontweight='bold')
 
-                plt.tight_layout()
-                plt.show(block=False)
-                plt.pause(0.1)
+        # Remove axes
+        ax = fig.add_subplot(111)
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 10)
+        ax.axis('off')
 
-            except ValueError:
-                print("Invalid input. Please enter numbers only.")
-                continue
+        # Add title text
+        ax.text(5, 8, 'Choose Number of Variables:',
+               ha='center', fontsize=16, fontweight='bold')
 
-            choice = input("\nOptions:\n1. Modify values\n2. Save image\n0. Back to menu\nChoice: ").strip()
-            if choice == '2':
-                filename = input("Enter filename (without extension): ").strip()
-                plt.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
-                print(f"Saved as {filename}.png")
-            elif choice != '1':
-                plt.close()
-                break
-            plt.close()
+        # Add description
+        ax.text(5, 7, 'Select how many variables you want to work with',
+               ha='center', fontsize=12, style='italic', alpha=0.7)
 
-    def visualize_3d_transformation(self):
-        """Interactive 3D linear transformation"""
-        while True:
-            print("\n" + "=" * 50)
-            print("3D Linear Transformation (3x3 Matrix)")
-            print("=" * 50)
+        # Create 2D button
+        ax_2d = plt.axes([0.15, 0.45, 0.3, 0.15])
+        btn_2d = Button(ax_2d, '2 Variables\n(2D Linear Equation)',
+                       color='lightblue')
 
-            try:
-                print("\nEnter transformation matrix (row by row):")
-                print("Row 1:")
-                a11 = float(input("  a11: "))
-                a12 = float(input("  a12: "))
-                a13 = float(input("  a13: "))
+        # Create 3D button
+        ax_3d = plt.axes([0.55, 0.45, 0.3, 0.15])
+        btn_3d = Button(ax_3d, '3 Variables\n(3D Plane Equation)',
+                       color='lightgreen')
 
-                print("Row 2:")
-                a21 = float(input("  a21: "))
-                a22 = float(input("  a22: "))
-                a23 = float(input("  a23: "))
+        # Exit button
+        ax_exit = plt.axes([0.35, 0.20, 0.3, 0.1])
+        btn_exit = Button(ax_exit, 'Exit Program', color='lightcoral')
 
-                print("Row 3:")
-                a31 = float(input("  a31: "))
-                a32 = float(input("  a32: "))
-                a33 = float(input("  a33: "))
+        # Store buttons to prevent garbage collection
+        fig._buttons = [btn_2d, btn_3d, btn_exit]
 
-                transform = np.array([[a11, a12, a13],
-                                     [a21, a22, a23],
-                                     [a31, a32, a33]])
+        # Connect buttons to functions
+        def launch_viz(viz_func):
+            """Close menu and launch visualization"""
+            self.programmatic_close = True
+            plt.close(fig)
+            viz_func()
 
-                # Original basis vectors
-                vectors = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-                transformed = vectors @ transform.T
+        btn_2d.on_clicked(lambda _event: launch_viz(self.visualize_2d_equation))
+        btn_3d.on_clicked(lambda _event: launch_viz(self.visualize_3d_equation))
+        btn_exit.on_clicked(lambda _event: self.on_menu_close(None))
 
-                # Create plot
-                fig = plt.figure(figsize=(14, 6))
+        # Connect close event
+        fig.canvas.mpl_connect('close_event', self.on_menu_close)
 
-                colors = ['r', 'g', 'b']
-                labels = ['i', 'j', 'k']
+        # Add instructions
+        ax.text(5, 1.2, 'Click a button to start visualizing equations!',
+               ha='center', fontsize=11, style='italic')
+        ax.text(5, 0.6, 'You can adjust constants using text boxes in the visualization',
+               ha='center', fontsize=10, alpha=0.6)
 
-                # Original vectors
-                ax1 = fig.add_subplot(121, projection='3d')
-                for i, v in enumerate(vectors):
-                    ax1.quiver(0, 0, 0, v[0], v[1], v[2], color=colors[i],
-                              arrow_length_ratio=0.15, linewidth=2, label=labels[i])
-
-                ax1.set_xlim([0, 2])
-                ax1.set_ylim([0, 2])
-                ax1.set_zlim([0, 2])
-                ax1.set_xlabel('X')
-                ax1.set_ylabel('Y')
-                ax1.set_zlabel('Z')
-                ax1.legend()
-                ax1.set_title('Original Basis Vectors')
-
-                # Transformed vectors
-                ax2 = fig.add_subplot(122, projection='3d')
-                for i, v in enumerate(transformed):
-                    ax2.quiver(0, 0, 0, v[0], v[1], v[2], color=colors[i],
-                              arrow_length_ratio=0.15, linewidth=2,
-                              label=f"{labels[i]}' = ({v[0]:.2f}, {v[1]:.2f}, {v[2]:.2f})")
-
-                max_val = max(np.max(np.abs(transformed)) + 1, 2)
-                ax2.set_xlim([0, max_val])
-                ax2.set_ylim([0, max_val])
-                ax2.set_zlim([0, max_val])
-                ax2.set_xlabel('X')
-                ax2.set_ylabel('Y')
-                ax2.set_zlabel('Z')
-                ax2.legend()
-                ax2.set_title('Transformed Vectors')
-
-                plt.tight_layout()
-                plt.show(block=False)
-                plt.pause(0.1)
-
-                # Calculate determinant
-                det = np.linalg.det(transform)
-                print(f"\nDeterminant: {det:.4f}")
-                print(f"Volume scaling factor: {abs(det):.4f}")
-
-            except ValueError:
-                print("Invalid input. Please enter numbers only.")
-                continue
-
-            choice = input("\nOptions:\n1. Modify values\n2. Save image\n0. Back to menu\nChoice: ").strip()
-            if choice == '2':
-                filename = input("Enter filename (without extension): ").strip()
-                plt.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
-                print(f"Saved as {filename}.png")
-            elif choice != '1':
-                plt.close()
-                break
-            plt.close()
+        plt.show()
 
     def run(self):
         """Main run loop"""
-        print("\n" + "=" * 50)
+        print("\n" + "=" * 60)
         print("Interactive Linear Algebra Visualizer")
-        print("=" * 50)
+        print("Choose between 2D (2 variables) or 3D (3 variables)")
+        print("=" * 60)
 
-        while True:
-            dimension = self.get_dimension_choice()
-
-            if dimension is None:
-                print("\nThank you for using the visualizer!")
-                break
-
-            viz_type = self.get_visualization_type(dimension)
-
-            if viz_type == '0':
-                continue
-
-            if dimension == 2:
-                if viz_type == '1':
-                    self.visualize_2d_vectors()
-                elif viz_type == '2':
-                    self.visualize_2d_linear_equation()
-                elif viz_type == '3':
-                    self.visualize_2d_system()
-                elif viz_type == '4':
-                    self.visualize_2d_transformation()
-            else:  # 3D
-                if viz_type == '1':
-                    self.visualize_3d_vectors()
-                elif viz_type == '2':
-                    self.visualize_3d_plane()
-                elif viz_type == '3':
-                    self.visualize_3d_system()
-                elif viz_type == '4':
-                    self.visualize_3d_transformation()
+        self.show_main_menu()
 
 
 if __name__ == '__main__':

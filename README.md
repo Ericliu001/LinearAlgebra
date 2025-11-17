@@ -49,7 +49,7 @@ pip install numpy matplotlib
 
 Run the script:
 ```bash
-python main.py
+python linear_algebra_visualizer.py
 ```
 
 ### How It Works
